@@ -5,14 +5,16 @@
 
 #include "SnapHandleInternal.h"
 #include <array>
+#include <cstddef>
 #include <fcntl.h>
 
 namespace snapalloc {
 
 struct SnapHandleInternal::SnapHandleProperties {
-  uint32_t view;
+  // Prebuilt OEM blobs read these fields by raw int index, so everything up
+  // to ref_count follows the stock CPH2745 snapalloc layout exactly. Only
+  // the batch-mode fields, which stock does not have, are appended after it.
   int flags;
-  int aligned_width_in_bytes;
   int aligned_width_in_pixels;
   int aligned_height;
   int unaligned_width;
@@ -24,22 +26,25 @@ struct SnapHandleInternal::SnapHandleProperties {
   vendor_qti_hardware_display_common_BufferUsage usage =
       vendor_qti_hardware_display_common_BufferUsage::CPU_READ_NEVER;
   unsigned size;
+  unsigned stock_padding = 0;
   uint64_t base;
   uint64_t base_metadata;
   uint64_t fb_id;
   unsigned reserved_size;
   unsigned custom_content_md_reserved_size;
-  unsigned batch_mode_dyn_md_reserved_size;
+  uint32_t view;
+  int aligned_width_in_bytes;
   uint64_t pixel_format_modifier;
   uint64_t reserved_region_base;
   uint64_t custom_content_md_region_base;
-  uint64_t batch_mode_dyn_md_region_base;
   //static const int kNumFds = 2;
   unsigned flush = false;
   // Lock count to ensure nested lock/unlock situations are handled correctly
   int lock_count = 0;
 
   int ref_count = 0;
+  unsigned batch_mode_dyn_md_reserved_size;
+  uint64_t batch_mode_dyn_md_region_base;
 };
 
 #define DEFINE_FD_ACCESSOR(cls, type, var) \
@@ -249,6 +254,39 @@ SnapHandleInternal::FdPair &SnapHandleInternal::currentFdPair() {
 }
 
 SnapHandleInternal::SnapHandleProperties &SnapHandleInternal::currentProperties() {
+  // Prebuilt OEM blobs read the handle by raw int index, keep the stock layout
+#define SNAP_HANDLE_STOCK_OFFSET(field, offset)                    \
+  static_assert(offsetof(SnapHandleProperties, field) == (offset), \
+                "SnapHandleProperties::" #field " moved off its stock offset")
+  SNAP_HANDLE_STOCK_OFFSET(flags, 0x0);
+  SNAP_HANDLE_STOCK_OFFSET(aligned_width_in_pixels, 0x4);
+  SNAP_HANDLE_STOCK_OFFSET(aligned_height, 0x8);
+  SNAP_HANDLE_STOCK_OFFSET(unaligned_width, 0xc);
+  SNAP_HANDLE_STOCK_OFFSET(unaligned_height, 0x10);
+  SNAP_HANDLE_STOCK_OFFSET(format, 0x14);
+  SNAP_HANDLE_STOCK_OFFSET(buffer_type, 0x18);
+  SNAP_HANDLE_STOCK_OFFSET(layer_count, 0x1c);
+  SNAP_HANDLE_STOCK_OFFSET(id, 0x20);
+  SNAP_HANDLE_STOCK_OFFSET(usage, 0x28);
+  SNAP_HANDLE_STOCK_OFFSET(size, 0x30);
+  SNAP_HANDLE_STOCK_OFFSET(base, 0x38);
+  SNAP_HANDLE_STOCK_OFFSET(base_metadata, 0x40);
+  SNAP_HANDLE_STOCK_OFFSET(fb_id, 0x48);
+  SNAP_HANDLE_STOCK_OFFSET(reserved_size, 0x50);
+  SNAP_HANDLE_STOCK_OFFSET(custom_content_md_reserved_size, 0x54);
+  SNAP_HANDLE_STOCK_OFFSET(view, 0x58);
+  SNAP_HANDLE_STOCK_OFFSET(aligned_width_in_bytes, 0x5c);
+  SNAP_HANDLE_STOCK_OFFSET(pixel_format_modifier, 0x60);
+  SNAP_HANDLE_STOCK_OFFSET(reserved_region_base, 0x68);
+  SNAP_HANDLE_STOCK_OFFSET(custom_content_md_region_base, 0x70);
+  SNAP_HANDLE_STOCK_OFFSET(flush, 0x78);
+  SNAP_HANDLE_STOCK_OFFSET(lock_count, 0x7c);
+  SNAP_HANDLE_STOCK_OFFSET(ref_count, 0x80);
+#undef SNAP_HANDLE_STOCK_OFFSET
+  // No padding after the appended batch-mode fields
+  static_assert(sizeof(SnapHandleProperties) == 0x90,
+                "SnapHandleProperties has unexpected padding");
+
   switch (getN()) {
     case 1:
       return static_cast<SnapHandleData<1> *>(this)->getProperties(0);
