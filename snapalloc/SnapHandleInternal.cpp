@@ -10,10 +10,8 @@
 namespace snapalloc {
 
 struct SnapHandleInternal::SnapHandleProperties {
-  uint32_t view;
   int flags;
   int aligned_width_in_bytes;
-  int aligned_width_in_pixels;
   int aligned_height;
   int unaligned_width;
   int unaligned_height;
@@ -24,6 +22,8 @@ struct SnapHandleInternal::SnapHandleProperties {
   vendor_qti_hardware_display_common_BufferUsage usage =
       vendor_qti_hardware_display_common_BufferUsage::CPU_READ_NEVER;
   unsigned size;
+  uint32_t view;
+  int aligned_width_in_pixels;
   uint64_t base;
   uint64_t base_metadata;
   uint64_t fb_id;
