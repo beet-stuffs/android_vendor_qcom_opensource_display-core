@@ -27,7 +27,10 @@ cc_library_shared {
         "-std=c++11",
         "-Werror",
         "-fno-operator-names",
-    ],
+    ] + select(soong_config_variable("qtidisplay", "wcg_vendor_render_intents"), {
+        true: ["-DWCG_VENDOR_RENDER_INTENTS"],
+        default: [],
+    }),
 
     srcs: ["*.cpp"],
 

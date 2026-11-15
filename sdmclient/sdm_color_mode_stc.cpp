@@ -145,6 +145,41 @@ void SDMColorModeStc::PopulateColorModes() {
             render_intent, dynamic_range);
     }
   }
+
+#ifdef WCG_VENDOR_RENDER_INTENTS
+  // Use the wide color gamut calibration of sRGB vendor render intents, found
+  // at a fixed offset, e.g. 301 -> 302 for Display P3 and 352 for BT2020.
+  static const std::pair<SDMColorMode, int32_t> kWcgIntentOffsets[] = {
+      {SDMColorMode::COLOR_MODE_DISPLAY_P3, 1},
+      {SDMColorMode::COLOR_MODE_DISPLAY_BT2020, 51},
+  };
+
+  auto srgb = color_mode_map_.find(SDMColorMode::COLOR_MODE_SRGB);
+  if (srgb == color_mode_map_.end()) {
+    return;
+  }
+
+  for (const auto &wcg_offset : kWcgIntentOffsets) {
+    auto wcg = color_mode_map_.find(wcg_offset.first);
+    if (wcg == color_mode_map_.end()) {
+      continue;
+    }
+
+    for (const auto &it : srgb->second) {
+      int32_t intent = static_cast<int32_t>(it.first);
+      if (intent < snapdragoncolor::kOemCustomStart ||
+          wcg->second.count(it.first)) {
+        continue;
+      }
+
+      auto target = wcg->second.find(
+          static_cast<SDMRenderIntent>(intent + wcg_offset.second));
+      if (target != wcg->second.end() && target->second.count(kSdrType)) {
+        wcg->second[it.first][kSdrType] = target->second[kSdrType];
+      }
+    }
+  }
+#endif
 }
 
 int32_t
